@@ -1,4 +1,4 @@
-mc_data_sync
-============
+mcds
+====
 
 Syncing data to/from materials commons

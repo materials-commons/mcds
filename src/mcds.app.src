@@ -1,0 +1,12 @@
+{application, mcds,
+ [
+  {description, ""},
+  {vsn, "1"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib
+                 ]},
+  {mod, { mcds_app, []}},
+  {env, []}
+ ]}.

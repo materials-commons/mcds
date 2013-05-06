@@ -36,7 +36,8 @@ handle_cast(stop, State) ->
 handle_info({tcp, Socket, RequestData},
             #state{socket = Socket, transport = Transport} = State)
                 when State#state.fd =:= not_open ->
-    {ok, Filename, Uuid, Size, Checksum} = splitout_request_data(RequestData),
+    RequestDataBin = list_to_binary(RequestData),
+    {ok, Filename, Uuid, Size, Checksum} = splitout_request_data(RequestDataBin),
     Filepath = construct_file_path(Uuid, Filename),
     DownloadedSize = get_file_size(Filepath),
     case size_and_checksum_match(Filepath, Size, DownloadedSize, Checksum) of
@@ -110,7 +111,7 @@ get_file_size(Filename) ->
     end.
 
 splitout_request_data(RequestData) ->
-    {[{_, Filename}, {_, Uuid}, {_, Size}, {_, Checksum}]} = jiffy:decode(RequestData),
+    [{_, Filename}, {_, Uuid}, {_, Size}, {_, Checksum}] = binary_to_term(RequestData),
     {ok, Filename, Uuid, Size, Checksum}.
 
 construct_file_path(Uuid, Filename) ->

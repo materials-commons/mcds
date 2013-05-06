@@ -42,6 +42,7 @@ send_file(Filepath) ->
     io:format("sf_writer: BinTerm = ~p~n", [BinTerm]),
     io:format("sf_writer: Sending ~p~n", [binary_to_term(BinTerm)]),
     gen_tcp:send(Socket, BinTerm),
+    io:format("Going into recv~n"),
     {ok, Reply} = gen_tcp:recv(Socket, 0),
     io:format("sf_writer: Got back: ~p~n", [Reply]),
     io:format("  sf_writer as: ~p~n", [binary_to_term(Reply)]),

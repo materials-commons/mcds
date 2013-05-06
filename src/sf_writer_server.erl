@@ -55,7 +55,7 @@ handle_cast(stop, State) ->
 
 handle_info({tcp, Socket, RequestData}, #state{} = State)
                 when State#state.fd =:= not_open ->
-    io:format("handle_info got data~n"),
+    io:format("~p handle_info got data~n", [self()]),
     RequestDataBin = list_to_binary(RequestData),
     {ok, Filename, Uuid, Size, Checksum} = splitout_request_data(RequestDataBin),
     Filepath = construct_file_path(Uuid, Filename),
@@ -69,19 +69,19 @@ handle_info({tcp, Socket, RequestData}, #state{} = State)
             {noreply, NewState}
     end;
 handle_info({tcp, _Sock, RawData}, #state{fd = Fd} = State) ->
-    io:format("handle_info fd open~n"),
+    io:format("~p handle_info fd open~n", [self()]),
     ok = file:write(Fd, RawData),
     {noreply, State};
 handle_info(timeout, #state{socket = Socket} = State) ->
     {ok, _Sock} = gen_tcp:accept(Socket),
-    io:format("Past accept~n"),
+    io:format("~p Past accept~n", [self()]),
     sf_writer_server_sup:start_child(),
     {noreply, State};
 handle_info({tcp_closed, _Socket}, #state{fd = Fd} = State) ->
     file:close(Fd),
     {stop, normal, State};
 handle_info(Info, State) ->
-    io:format("State = ~p~n", [State]),
+    io:format("~p State = ~p~n", [self(), State]),
     io:format("Info = ~p~n", [Info]),
     %io:format("As binary ~p~n", [list_to_binary(Info)]),
     %io:format("As term ~p~n", [binary_to_term()])
@@ -104,9 +104,9 @@ send_already_downloaded(Socket) ->
 
 prepare_download(Filepath, FileSize, #state{socket = Socket} = State) ->
     {ok, Fd} = open_file(Filepath, FileSize),
-    io:format("Sending {ok, FileSize} on socket~n"),
+    io:format("~p Sending {ok, FileSize} on socket as ~p~n", [self(), term_to_binary({ok, FileSize})]),
     gen_tcp:send(Socket, term_to_binary({ok, FileSize})),
-    io:format("Done sending {ok, FileSize}~n"),
+    io:format("~p Done sending {ok, FileSize}~n", [self()]),
     State#state{fd = Fd}.
 
 size_and_checksum_match(Filepath, Size, DownloadedSize, Checksum) ->

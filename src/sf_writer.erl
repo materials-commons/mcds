@@ -1,31 +1,51 @@
--module(sf_writer_protocol).
+%%% ===================================================================
+%%% @doc Started on a file write request. Accepts file data and writes
+%%%      it to the file system. Also updates a minimal set of meta data,
+%%%      such as .
+%%%
+%%% Copyright (c) 2013, Regents of the University of Michigan.
+%%% All rights reserved.
+%%%
+%%% Permission to use, copy, modify, and/or distribute this software for any
+%%% purpose with or without fee is hereby granted, provided that the above
+%%% copyright notice and this permission notice appear in all copies.
+%%%
+%%% THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+%%% WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+%%% MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+%%% ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+%%% WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+%%% ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+%%% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+%%% ===================================================================
+
+-module(sf_writer).
 -behaviour(gen_server).
--behaviour(ranch_protocol).
 
 -include_lib("kernel/include/file.hrl").
 
 %% API (ranch) callback
--export([start_link/4]).
+-export([start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
             terminate/2, code_change/3]).
 
--record(state, {socket, transport, lref, fd}).
+-record(state, {socket, fd}).
 
 %% ===================================================================
 %% API (ranch) functions
 %% ===================================================================
 
-start_link(ListenerRef, Socket, Transport, _Opts) ->
-    gen_server:start_link(?MODULE, [ListenerRef, Socket, Transport], []).
+start_link(LSock) ->
+    gen_server:start_link(?MODULE, [LSock], []).
 
 %% ===================================================================
 %% gen_server callbacks
 %% ===================================================================
 
-init([ListenerRef, Socket, Transport]) ->
-    {ok, #state{socket = Socket, transport = Transport, lref = ListenerRef, fd = not_open}, 0}.
+init([LSock]) ->
+    {ok, #state{socket = LSock, fd = not_open}, 0}.
 
 handle_call(Msg, _From, State) ->
     {reply, {ok, Msg}, State}.
@@ -33,8 +53,7 @@ handle_call(Msg, _From, State) ->
 handle_cast(stop, State) ->
     {stop, normal, State}.
 
-handle_info({tcp, Socket, RequestData},
-            #state{socket = Socket, transport = Transport} = State)
+handle_info({tcp, Socket, RequestData}, #state{socket = Socket} = State)
                 when State#state.fd =:= not_open ->
     RequestDataBin = list_to_binary(RequestData),
     {ok, Filename, Uuid, Size, Checksum} = splitout_request_data(RequestDataBin),
@@ -42,25 +61,21 @@ handle_info({tcp, Socket, RequestData},
     DownloadedSize = get_file_size(Filepath),
     case size_and_checksum_match(Filepath, Size, DownloadedSize, Checksum) of
         true ->
-            send_already_downloaded(Socket, Transport),
+            send_already_downloaded(Socket),
             {stop, normal, State};
         _ ->
             NewState = prepare_download(Filepath, DownloadedSize, State),
-            ok = Transport:setopts(Socket, [{active, once}]),
             {noreply, NewState}
     end;
-handle_info({tcp, Socket, RawData},
-            #state{socket = Socket, transport = Transport, fd = Fd} = State) ->
+handle_info({tcp, Socket, RawData}, #state{socket = Socket, fd = Fd} = State) ->
     ok = file:write(Fd, RawData),
-    ok = Transport:setopts(Socket, [{active, once}]),
     {noreply, State};
-handle_info(timeout, #state{socket = Socket, transport = Transport, lref = LRef} = State) ->
-    ok = ranch:accept_ack(LRef),
-    ok = Transport:setopts(Socket, [{active, once}]),
+handle_info(timeout, #state{socket = Socket} = State) ->
+    {ok, _Sock} = gen_tcp:accept(Socket),
+    sf_writer_sup:start_child(),
     {noreply, State};
 handle_info({tcp_closed, _Socket}, #state{fd = Fd} = State) ->
     file:close(Fd),
-    % DO WE NEED TO DO Transport:close(Socket)?
     {stop, normal, State};
 handle_info(_Info, State) ->
     {noreply, State}.
@@ -76,13 +91,13 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal functions
 %% ===================================================================
 
-send_already_downloaded(Socket, Transport) ->
-    Transport:send(Socket, term_to_binary([{status, already_downloaded}, {size, 0}])).
+send_already_downloaded(Socket) ->
+    gen_tcp:send(Socket, term_to_binary([{status, already_downloaded}, {size, 0}])).
 
 prepare_download(Filepath, FileSize,
-            #state{socket = Socket, transport = Transport, fd = Fd} = State) ->
+            #state{socket = Socket, fd = Fd} = State) ->
     {ok, Fd} = open_file(Filepath, FileSize),
-    Transport:send(Socket, term_to_binary([{status, ok}, {size, FileSize}])),
+    gen_tcp:send(Socket, term_to_binary([{status, ok}, {size, FileSize}])),
     State#state{fd = Fd}.
 
 size_and_checksum_match(Filepath, Size, DownloadedSize, Checksum) ->

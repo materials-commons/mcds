@@ -6,3 +6,5 @@ deps
 *.swp
 ebin
 rel/mcds
+rel/files/app.config
+*.dump

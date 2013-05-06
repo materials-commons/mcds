@@ -1,7 +1,5 @@
 %%% ===================================================================
-%%% @doc Started on a file write request. Accepts file data and writes
-%%%      it to the file system. Also updates a minimal set of meta data,
-%%%      such as .
+%%% @doc API for file transfers.
 %%%
 %%% Copyright (c) 2013, Regents of the University of Michigan.
 %%% All rights reserved.
@@ -20,116 +18,41 @@
 %%% ===================================================================
 
 -module(sf_writer).
--behaviour(gen_server).
+
+%% API
+-export([send_file/1]).
 
 -include_lib("kernel/include/file.hrl").
 
-%% API callback
--export([start_link/1]).
-
-%% gen_server callbacks
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-            terminate/2, code_change/3]).
-
--record(state, {socket, fd}).
+-define(PORT, 11011).
+-define(UUID, "abc123").
 
 %% ===================================================================
-%% API functions
+%% API
 %% ===================================================================
 
-start_link(LSock) ->
-    gen_server:start_link(?MODULE, [LSock], []).
-
-%% ===================================================================
-%% gen_server callbacks
-%% ===================================================================
-
-init([LSock]) ->
-    {ok, #state{socket = LSock, fd = not_open}, 0}.
-
-handle_call(Msg, _From, State) ->
-    {reply, {ok, Msg}, State}.
-
-handle_cast(stop, State) ->
-    {stop, normal, State}.
-
-handle_info({tcp, Socket, RequestData}, #state{socket = Socket} = State)
-                when State#state.fd =:= not_open ->
-    RequestDataBin = list_to_binary(RequestData),
-    {ok, Filename, Uuid, Size, Checksum} = splitout_request_data(RequestDataBin),
-    Filepath = construct_file_path(Uuid, Filename),
-    DownloadedSize = get_file_size(Filepath),
-    case size_and_checksum_match(Filepath, Size, DownloadedSize, Checksum) of
-        true ->
-            send_already_downloaded(Socket),
-            {stop, normal, State};
-        _ ->
-            NewState = prepare_download(Filepath, DownloadedSize, State),
-            {noreply, NewState}
-    end;
-handle_info({tcp, Socket, RawData}, #state{socket = Socket, fd = Fd} = State) ->
-    ok = file:write(Fd, RawData),
-    {noreply, State};
-handle_info(timeout, #state{socket = Socket} = State) ->
-    {ok, _Sock} = gen_tcp:accept(Socket),
-    sf_writer_sup:start_child(),
-    {noreply, State};
-handle_info({tcp_closed, _Socket}, #state{fd = Fd} = State) ->
-    file:close(Fd),
-    {stop, normal, State};
-handle_info(_Info, State) ->
-    {noreply, State}.
-
-%% Should we close the file here?
-terminate(_Reason, _State) ->
+send_file(Filepath) ->
+    {ok, #file_info{size = Size}} = file:read_file_info(Filepath),
+    {ok, Socket} = gen_tcp:connect("127.0.0.1", ?PORT,
+                        [binary, {packet, raw}, {active, false}]),
+    Basename = filename:basename(Filepath),
+    Checksum = checksums:md5sum(Filepath),
+    BinTerm = term_to_binary([{filename, Basename}, {uuid, ?UUID},
+                                {size, Size}, {checksum, Checksum}]),
+    io:format("sf_writer: BinTerm = ~p~n", [BinTerm]),
+    io:format("sf_writer: Sending ~p~n", [binary_to_term(BinTerm)]),
+    gen_tcp:send(Socket, BinTerm),
+    {ok, Reply} = gen_tcp:recv(Socket, 0),
+    io:format("sf_writer: Got back: ~p~n", [Reply]),
+    io:format("  sf_writer as: ~p~n", [binary_to_term(Reply)]),
+    case binary_to_term(Reply) of
+        already_downloaded -> ok;
+        {ok, SizeOfFileOnServer} ->
+            send_file_data(Filepath, SizeOfFileOnServer, Socket)
+    end,
+    gen_tcp:close(Socket),
     ok.
 
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-%% ===================================================================
-%% Internal functions
-%% ===================================================================
-
-send_already_downloaded(Socket) ->
-    gen_tcp:send(Socket, term_to_binary([{status, already_downloaded}, {size, 0}])).
-
-prepare_download(Filepath, FileSize,
-            #state{socket = Socket, fd = Fd} = State) ->
-    {ok, Fd} = open_file(Filepath, FileSize),
-    gen_tcp:send(Socket, term_to_binary([{status, ok}, {size, FileSize}])),
-    State#state{fd = Fd}.
-
-size_and_checksum_match(Filepath, Size, DownloadedSize, Checksum) ->
-    case Size =:= DownloadedSize of
-        true ->
-            DownloadedChecksum = checksums:md5sum(Filepath),
-            Checksum =:= DownloadedChecksum;
-        false ->
-            false
-    end.
-
-open_file(Filepath, FileSize) ->
-    case FileSize of
-        0 ->
-            file:open(Filepath, [raw, binary, write]);
-        _ ->
-            file:open(Filepath, [raw, binary, append])
-    end.
-
-get_file_size(Filename) ->
-    case file:read_file_info(Filename) of
-        {ok, FileInfo} ->
-            FileInfo#file_info.size;
-        {error, enoent} ->
-            0
-    end.
-
-splitout_request_data(RequestData) ->
-    [{_, Filename}, {_, Uuid}, {_, Size}, {_, Checksum}] = binary_to_term(RequestData),
-    {ok, Filename, Uuid, Size, Checksum}.
-
-construct_file_path(Uuid, Filename) ->
-    filename:join(["/data", Uuid, Filename]).
-
-
+send_file_data(Filepath, SizeOfFileOnServer, Socket) ->
+    io:format("SizeOfFileOnServer ~p~n", [SizeOfFileOnServer]),
+    file:sendfile(Filepath, Socket).

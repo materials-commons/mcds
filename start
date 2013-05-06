@@ -1,0 +1,5 @@
+#!/bin/sh
+#erl -config rel/files/app -pa ebin -pa ../erlang-stomp-client/ebin -pa deps/ossp_uuid/ebin -pa deps/handyman/ebin 
+#erl -config rel/files/app -pa ebin -pa deps/stomp_client/ebin -pa deps/ossp_uuid/ebin -pa deps/handyman/ebin
+erl -config rel/files/app -pa ebin -pa deps/stomp_client/ebin -pa deps/ossp_uuid/ebin -pa deps/handyman/ebin  -eval "application:start(mcds)."
+

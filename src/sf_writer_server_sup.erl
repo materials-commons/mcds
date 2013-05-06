@@ -17,7 +17,7 @@
 %%% OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 %%% ===================================================================
 
--module(sf_writer_sup).
+-module(sf_writer_server_sup).
 
 -behaviour(supervisor).
 
@@ -40,7 +40,7 @@
 start_link(LSock) ->
     supervisor:start_link({local, ?SERVER}, ?MODULE, [LSock]).
 
-%% @doc start child process (sf_writer)
+%% @doc start child process (sf_writer_server)
 start_child() ->
     supervisor:start_child(?SERVER, []).
 
@@ -50,5 +50,5 @@ start_child() ->
 
 %% @private
 init([LSock]) ->
-    SfWriter = ?CHILD(sf_writer, [LSock]),
+    SfWriter = ?CHILD(sf_writer_server, [LSock]),
     {ok, { {simple_one_for_one, 0, 1}, [SfWriter] } }.

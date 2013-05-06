@@ -28,9 +28,6 @@ dev-rel-config:
 relclean:
 	rm -rf rel/mcds
 
-relclean:
-	rm -rf rel/mcds
-
 appclean:
 	rm -f ebin/*.beam
 

@@ -14,11 +14,16 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    Port = get_env_default(port, ?DEFAULT_PORT),
-    Server = get_env_default(mc_server, ?DEFAULT_MC_SERVER),
-    SyncQueue = get_sync_queue(),
-    {ok, LSocket} = gen_tcp:listen(Port, [{active, true}]),
-    mcds_sup:start_link(LSocket, Server, SyncQueue).
+    {ok, Socket} = gen_tcp:listen(11011, [{active, true}, {reuseaddr, true}]),
+    RV = sf_writer_server_sup:start_link(Socket),
+    sf_writer_server_sup:start_child(),
+    RV.
+
+    % Port = get_env_default(port, ?DEFAULT_PORT),
+    % Server = get_env_default(mc_server, ?DEFAULT_MC_SERVER),
+    % SyncQueue = get_sync_queue(),
+    % {ok, LSocket} = gen_tcp:listen(Port, [{active, true}]),
+    % mcds_sup:start_link(LSocket, Server, SyncQueue).
 
 stop(_State) ->
     ok.

@@ -76,12 +76,12 @@ code_change(_OldVsn, State, _Extra) ->
 %% ===================================================================
 
 send_already_downloaded(Socket, Transport) ->
-    Transport:send(Socket, jiffy:encode([{status, already_downloaded}, {size, 0}])).
+    Transport:send(Socket, term_to_binary([{status, already_downloaded}, {size, 0}])).
 
 prepare_download(Filepath, FileSize,
             #state{socket = Socket, transport = Transport, fd = Fd} = State) ->
     {ok, Fd} = open_file(Filepath, FileSize),
-    Transport:send(Socket, jiffy:encode([{status, ok}, {size, FileSize}])),
+    Transport:send(Socket, term_to_binary([{status, ok}, {size, FileSize}])),
     State#state{fd = Fd}.
 
 size_and_checksum_match(Filepath, Size, DownloadedSize, Checksum) ->

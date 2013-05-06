@@ -24,7 +24,7 @@
 
 -include_lib("kernel/include/file.hrl").
 
-%% API (ranch) callback
+%% API callback
 -export([start_link/1]).
 
 %% gen_server callbacks
@@ -34,7 +34,7 @@
 -record(state, {socket, fd}).
 
 %% ===================================================================
-%% API (ranch) functions
+%% API functions
 %% ===================================================================
 
 start_link(LSock) ->

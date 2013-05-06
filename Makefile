@@ -15,10 +15,24 @@ deps:
 generate:
 	./rebar generate
 
-rel: deps compile generate
+rel: rel-config deps compile generate
+
+devrel: devl-rel-config deps compile generate
+
+rel-config:
+	cp rel/files/app.config.rel rel/files/app.config
+
+dev-rel-config:
+	cp rel/files/app.config.dev rel/files/app.config
 
 relclean:
 	rm -rf rel/mcds
+
+relclean:
+	rm -rf rel/mcds
+
+appclean:
+	rm -f ebin/*.beam
 
 clean: distclean
 	./rebar clean

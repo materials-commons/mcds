@@ -97,7 +97,11 @@ handle_cast(_Msg, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({tcp, Socket, Filename}, State) when State#state.fd =:= not_set ->
+%handle_info({tcp, Socket, Filename}, State) when State#state.fd =:= not_set ->
+handle_info({tcp, Socket, Request}, State) when State#state.fd =:= not_set ->
+    %RequestBin = list_to_binary(Request),
+    %io:format("RequestBin =")
+    {ok, Filename, Uuid, Size, Checksum} = splitout_request_data(Request),
     Filepath = filename:join(?BASE_PATH, Filename),
     {ok, Fd} = file:open(Filepath, [raw, binary, write]),
     gen_tcp:send(Socket, term_to_binary({ok, 23})),
@@ -180,6 +184,8 @@ get_file_size(Filename) ->
     end.
 
 splitout_request_data(RequestData) ->
+    Term = binary_to_term(RequestData),
+    io:format("splitout_request = ~p~n", [Term]),
     [{_, Filename}, {_, Uuid}, {_, Size}, {_, Checksum}] = binary_to_term(RequestData),
     {ok, Filename, Uuid, Size, Checksum}.
 

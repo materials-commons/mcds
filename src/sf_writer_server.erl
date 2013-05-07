@@ -139,6 +139,7 @@ splitout_request_data(RequestData) ->
     {ok, Filename, Uuid, Size, Checksum}.
 
 construct_file_path(Uuid, Filename) ->
-    filename:join(["/tmp", Uuid, Filename]).
+    filename:join(["/tmp", Filename]).
+    %filename:join(["/tmp", Uuid, Filename]).
 
 

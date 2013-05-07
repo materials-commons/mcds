@@ -10,6 +10,8 @@
 
 -behaviour(gen_server).
 
+-include_lib("kernel/include/file.hrl").
+
 %% API
 -export([start_link/1]).
 
@@ -141,3 +143,46 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+send_already_downloaded(Socket) ->
+    gen_tcp:send(Socket, term_to_binary(already_downloaded)).
+
+prepare_download(Filepath, FileSize, #state{lsocket = Socket} = State) ->
+    {ok, Fd} = open_file(Filepath, FileSize),
+    io:format("~p Sending {ok, FileSize} on socket as ~p~n", [self(), term_to_binary({ok, FileSize})]),
+    gen_tcp:send(Socket, term_to_binary({ok, FileSize})),
+    io:format("~p Done sending {ok, FileSize}~n", [self()]),
+    State#state{fd = Fd}.
+
+size_and_checksum_match(Filepath, Size, DownloadedSize, Checksum) ->
+    case Size =:= DownloadedSize of
+        true ->
+            DownloadedChecksum = checksums:md5sum(Filepath),
+            Checksum =:= DownloadedChecksum;
+        false ->
+            false
+    end.
+
+open_file(Filepath, FileSize) ->
+    case FileSize of
+        0 ->
+            file:open(Filepath, [raw, binary, write]);
+        _ ->
+            file:open(Filepath, [raw, binary, append])
+    end.
+
+get_file_size(Filename) ->
+    case file:read_file_info(Filename) of
+        {ok, FileInfo} ->
+            FileInfo#file_info.size;
+        {error, enoent} ->
+            0
+    end.
+
+splitout_request_data(RequestData) ->
+    [{_, Filename}, {_, Uuid}, {_, Size}, {_, Checksum}] = binary_to_term(RequestData),
+    {ok, Filename, Uuid, Size, Checksum}.
+
+construct_file_path(Uuid, Filename) ->
+    filename:join(["/tmp", Filename]).
+    %filename:join(["/tmp", Uuid, Filename]).

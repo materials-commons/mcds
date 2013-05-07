@@ -14,7 +14,7 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    {ok, Socket} = gen_tcp:listen(11011, [{active, true}, {reuseaddr, true}]),
+    {ok, Socket} = gen_tcp:listen(11011, [binary, {packet, raw}, {active, true}, {reuseaddr, true}]),
     RV = sf_writer_server_sup:start_link(Socket),
     sf_writer_server_sup:start_child(),
     RV.
